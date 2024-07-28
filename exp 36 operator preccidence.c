@@ -1,101 +1,122 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <string.h>
 
+#define MAX 100
 
-double performOperation(double a, double b, char op) {
+char opStack[MAX];
+int opTop = -1;
+double valStack[MAX];
+int valTop = -1;
+
+void pushOp(char op) {
+    opStack[++opTop] = op;
+}
+
+char popOp() {
+    if (opTop == -1) return '\0';
+    return opStack[opTop--];
+}
+
+char peekOp() {
+    if (opTop == -1) return '\0';
+    return opStack[opTop];
+}
+
+void pushVal(double val) {
+    valStack[++valTop] = val;
+}
+
+double popVal() {
+    if (valTop == -1) return 0;
+    return valStack[valTop--];
+}
+
+int precedence(char op) {
+    switch (op) {
+        case '+': case '-': return 1;
+        case '*': case '/': return 2;
+        case '^': return 3;
+        case '(': return 0;
+    }
+    return -1;
+}
+
+double applyOp(double a, double b, char op) {
     switch (op) {
         case '+': return a + b;
         case '-': return a - b;
         case '*': return a * b;
         case '/': return a / b;
         case '^': return pow(a, b);
-        default: return 0;
     }
+    return 0;
 }
 
-int precedence(char op) {
-    switch (op) {
-        case '+':
-        case '-': return 1;
-        case '*':
-        case '/': return 2;
-        case '^': return 3;
-        default: return 0;
-    }
+void processOp(char op) {
+    double b = popVal();
+    double a = popVal();
+    double result = applyOp(a, b, op);
+    printf("Step: Apply %c to %.2f and %.2f\n", op, a, b);
+    printf("%.2f %c %.2f = %.2f\n", a, op, b, result);
+    pushVal(result);
 }
 
-void applyOperation(double *values, int *valIndex, char *ops, int *opIndex) {
-    double b = values[--(*valIndex)];
-    double a = values[--(*valIndex)];
-    char op = ops[--(*opIndex)];
-    values[(*valIndex)++] = performOperation(a, b, op);
-}
-
-double evaluateExpression(const char *expr) {
-    double values[100];
-    char ops[100];
-    int valIndex = 0, opIndex = 0;
-    int i = 0;
-
-    while (expr[i] != '\0') {
-        if (isspace(expr[i])) {
-            i++;
-            continue;
-        }
-
-        if (isdigit(expr[i])) {
-            double value = 0;
-            while (isdigit(expr[i])) {
-                value = (value * 10) + (expr[i++] - '0');
-            }
-            if (expr[i] == '.') {
-                i++;
-                double fraction = 1;
-                while (isdigit(expr[i])) {
-                    fraction /= 10;
-                    value += (expr[i++] - '0') * fraction;
+void evaluateExpression(char* expr) {
+    int i;
+    for (i = 0; expr[i] != '\0'; i++) {
+        if (isspace(expr[i])) continue;
+        if (isdigit(expr[i]) || expr[i] == '.') {
+            double num = 0;
+            int decimal_places = 0;
+            while (isdigit(expr[i]) || expr[i] == '.') {
+                if (expr[i] == '.') {
+                    decimal_places = 1;
+                } else {
+                    if (decimal_places) {
+                        num = num + (expr[i] - '0') * pow(10, -decimal_places);
+                        decimal_places++;
+                    } else {
+                        num = num * 10 + (expr[i] - '0');
+                    }
                 }
+                i++;
             }
-            values[valIndex++] = value;
+            i--;
+            pushVal(num);
         } else if (expr[i] == '(') {
-            ops[opIndex++] = expr[i++];
+            pushOp(expr[i]);
         } else if (expr[i] == ')') {
-            while (opIndex > 0 && ops[opIndex - 1] != '(') {
-                applyOperation(values, &valIndex, ops, &opIndex);
+            while (peekOp() != '(') {
+                processOp(popOp());
             }
-            opIndex--; 
-            i++;
+            popOp();
         } else {
-            while (opIndex > 0 && precedence(ops[opIndex - 1]) >= precedence(expr[i])) {
-                applyOperation(values, &valIndex, ops, &opIndex);
+            while (opTop != -1 && precedence(peekOp()) >= precedence(expr[i])) {
+                processOp(popOp());
             }
-            ops[opIndex++] = expr[i++];
+            pushOp(expr[i]);
         }
     }
 
-    while (opIndex > 0) {
-        applyOperation(values, &valIndex, ops, &opIndex);
+    while (opTop != -1) {
+        processOp(popOp());
     }
-
-    return values[0];
 }
 
 int main() {
-    char expr[100];
+    printf("PEMDAS: Parentheses, Exponentiation, Multiplication, Division, Addition, Subtraction\n");
+    
+    char expr[MAX];
+    printf("Enter an expression: ");
+    fgets(expr, MAX, stdin);
+    expr[strcspn(expr, "\n")] = 0;
 
-    printf("Enter an arithmetic expression: ");
-    fgets(expr, sizeof(expr), stdin);
-
-    size_t length = strlen(expr);
-    if (length > 0 && expr[length - 1] == '\n') {
-        expr[length - 1] = '\0';
-    }
-
-    double result = evaluateExpression(expr);
-    printf("The result of the expression is: %.2f\n", result);
+    evaluateExpression(expr);
+    printf("Final Result: %.2f\n", popVal());
 
     return 0;
 }
+
